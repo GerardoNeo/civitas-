@@ -300,7 +300,7 @@ export class EmpleadoService {
         },
       });
 
-      //Revocar su QR
+      // Revocar su QR
       await this.prisma.acceso.updateMany({
         where: { id_visitante: servicio.id_visitante },
         data: {
@@ -308,6 +308,46 @@ export class EmpleadoService {
           comentario_admin: motivo,
         },
       });
+
+      // Buscar acceso relacionado
+      const acceso = await this.prisma.acceso.findFirst({
+        where: {
+          id_visitante: servicio.id_visitante,
+        },
+        select: {
+          id_acceso: true,
+        },
+      });
+
+      // Registrar en bitácora
+      if (acceso) {
+        const guardia = await this.prisma.guardia.findFirst({
+          select: { id_guardia: true },
+        });
+
+        const comentario = `[ADMIN] Empleado dado de baja. Motivo: ${
+          motivo || 'Sin especificar'
+        }`;
+
+        const bitacoraExistente = await this.prisma.bitacora.findUnique({
+          where: { id_acceso: acceso.id_acceso },
+        });
+
+        if (bitacoraExistente) {
+          await this.prisma.bitacora.update({
+            where: { id_acceso: acceso.id_acceso },
+            data: { comentario },
+          });
+        } else if (guardia) {
+          await this.prisma.bitacora.create({
+            data: {
+              id_acceso: acceso.id_acceso,
+              id_guardia: guardia.id_guardia,
+              comentario,
+            },
+          });
+        }
+      }
 
       return {
         statusCode: 200,
@@ -321,10 +361,10 @@ export class EmpleadoService {
         throw error;
       }
 
-      // Error 500: Error inesperado
       console.error('Error en eliminarEmpleado:', error);
+
       throw new InternalServerErrorException(
-        'Ocurrió un error inesperado al intentar dar de baja al empleado. Por favor, inténtelo de nuevo más tarde.',
+        'Ocurrió un error inesperado al intentar dar de baja al empleado.',
       );
     }
   }
@@ -344,6 +384,38 @@ export class EmpleadoService {
         where: { id_visitante: servicio.id_visitante },
         data: { estatus: 'Activo' },
       });
+
+      const acceso = await this.prisma.acceso.findFirst({
+        where: { id_visitante: servicio.id_visitante },
+        select: { id_acceso: true },
+      });
+
+      if (acceso) {
+        const guardia = await this.prisma.guardia.findFirst({
+          select: { id_guardia: true },
+        });
+
+        const comentario = `[ADMIN] Empleado reactivado`;
+
+        const bitacoraExistente = await this.prisma.bitacora.findUnique({
+          where: { id_acceso: acceso.id_acceso },
+        });
+
+        if (bitacoraExistente) {
+          await this.prisma.bitacora.update({
+            where: { id_acceso: acceso.id_acceso },
+            data: { comentario },
+          });
+        } else if (guardia) {
+          await this.prisma.bitacora.create({
+            data: {
+              id_acceso: acceso.id_acceso,
+              id_guardia: guardia.id_guardia,
+              comentario,
+            },
+          });
+        }
+      }
 
       return {
         statusCode: 200,
